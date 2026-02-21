@@ -83,32 +83,29 @@ def policy_iteration(env, gamma, k, V_init):
 # Running Q1 experiments
 # ---------------------------------------------------------------
 
-def run_q1(locations, seeds=[0,1,2], ks=[1,2,4,8,16], gamma=0.95):
-    results = {}
-    best_value_norm = -np.inf
-    best_policy = None
+def run_q1(locations, seeds=[0, 1, 2], ks=[1, 2, 4, 8, 16], gamma=0.75):
+    results = {"zeros": {}, "minus100": {}}  # Initialize results for both init types
+    best_policies = {"zeros": None, "minus100": None}
+    best_value_norms = {"zeros": -np.inf, "minus100": -np.inf}
 
     for init_type in ["zeros", "minus100"]:
-        results[init_type] = {}
+        for k in tqdm(ks, desc=f"Processing init_type={init_type}"):
+            if k not in results[init_type]:
+                results[init_type][k] = []  # Initialize results for each k
 
-        for k in tqdm(ks):
-            results[init_type][k] = []
-
-            for seed in tqdm(seeds):
+            for seed in tqdm(seeds, desc=f"Processing seeds for k={k}", leave=False):
                 print(f"Running k={k}, seed={seed}, init={init_type}")
 
-                env = TreasureHunt(locations, n=7, is_testing=False)
+                env = TreasureHunt(locations, n=10, is_testing=False)
                 np.random.seed(seed)
 
                 S = env.num_states
                 if init_type == "zeros":
                     V0 = np.zeros(S)
                 else:
-                    V0 = -100*np.ones(S)
+                    V0 = -100 * np.ones(S)
                     # terminal (fort) must have V=0
                     fort = env.locations['fort'][0]
-                    fort_state = 0
-                    # find all states where ship is on fort
                     for s in range(S):
                         ship_loc, _ = env.locations_from_state(s)
                         if ship_loc == fort:
@@ -119,51 +116,51 @@ def run_q1(locations, seeds=[0,1,2], ks=[1,2,4,8,16], gamma=0.95):
                 V, policy, norms = policy_iteration(env, gamma, k, V0)
                 results[init_type][k].append(norms)
 
-                # Check if this policy is the best so far
+                # Check if this policy is the best so far for the current init_type
                 current_value_norm = np.linalg.norm(V)
-                if current_value_norm > best_value_norm:
-                    best_value_norm = current_value_norm
-                    best_policy = policy
+                if current_value_norm > best_value_norms[init_type]:
+                    best_value_norms[init_type] = current_value_norm
+                    best_policies[init_type] = policy
 
     np.save("Q1_results.npy", results)
     print("Saved Q1_results.npy")
 
-    return results, best_policy
+    return results, best_policies
 
-def plot_norms(results, seeds, ks):
+def plot_norms(results, seeds, ks, init_type, gamma):
     """Plot the 2-norm series for all k and seeds."""
     plt.figure(figsize=(12, 8))
 
     for seed_idx, seed in enumerate(seeds):
         plt.subplot(1, len(seeds), seed_idx + 1)
         for k in ks:
-            norms = results["zeros"][k][seed_idx]  # Get norms for this k and seed
+            norms = results[init_type][k][seed_idx]  # Get norms for this k and seed
             plt.plot(norms, label=f"k={k}")
 
-        plt.title(f"Seed = {seed}")
+        plt.title(f"Seed = {seed} for V0(s) = {init_type}")
         plt.xlabel("Policy Improvement Step")
         plt.ylabel("2-Norm of Value Estimates")
         plt.legend()
         plt.grid()
 
     plt.tight_layout()
-    plt.savefig("Q1_norms_plot.png")
+    plt.savefig(f"Q1_norms_plot_{init_type}_gamma={gamma}.png")
     plt.close()
 
-def generate_gifs(locations, seeds, policy, gamma=0.95):
+def generate_gifs(locations, seeds, policy, init_type, gamma):
     """Generate GIFs for one episode using the optimal policy for each seed."""
     for seed in seeds:
         print(f"Generating GIF for seed={seed}...")
 
         # Initialize the environment
-        env = TreasureHunt(locations, n=7, is_testing=True)
+        env = TreasureHunt(locations, n=10, is_testing=True)
         np.random.seed(seed)
 
         # Reset the environment to the initial state
         env.reset()
 
         # Generate the GIF for the optimal policy
-        gif_path = f"policy_execution_seed_{seed}.gif"
+        gif_path = f"policy_execution_seed{seed}_{init_type}_gamma{gamma}.gif"
         env.visualize_policy_execution(policy, path=gif_path)
 
         print(f"Saved GIF for seed={seed} at {gif_path}")
@@ -171,19 +168,25 @@ def generate_gifs(locations, seeds, policy, gamma=0.95):
 if __name__ == "__main__":
 
     locations = {
-    'ship': [(0, 0)],
-    'land': [(2,0), (2,1), (3,1), (0,5), (0,6), (1,5)],
-    'fort': [(6, 6)],
-    'pirate': [(3,4), (5,3)],
-    'treasure': [(3,0), (1,6)]
+        'ship': [(0, 0)],
+        'land': [(3, 0), (3, 1), (3, 2), (4, 2), (4, 1), (5, 2), (0, 7), (0, 8), (0, 9), (1, 7), (1, 8), (2, 7)],
+        'fort': [(9, 9)],
+        'pirate': [(4, 7), (8, 5)],
+        'treasure': [(4, 0), (1, 9)]
     }
 
     seeds = [42, 1, 2]
     ks = [1, 2, 4, 8, 16]
-    results, policy = run_q1(locations)
+    gamma = 0.5
 
-    # Plot the norms for all k and seeds
-    plot_norms(results, seeds, ks)
+    # Run experiments and get results and best policies for both init types
+    results, best_policies = run_q1(locations, seeds, ks, gamma)
 
-    # Generate GIFs for the optimal policy
-    generate_gifs(locations, seeds, policy)
+    # Plot the norms for both initialization types
+    for init_type in ["zeros", "minus100"]:
+        plot_norms(results, seeds, ks, init_type, gamma)
+
+    # Generate GIFs for the best policies of both initialization types
+    for init_type in ["zeros", "minus100"]:
+        print(f"Generating GIFs for init_type={init_type}...")
+        generate_gifs(locations, seeds, best_policies[init_type], init_type, gamma)
