@@ -117,6 +117,7 @@ class TreasureHunt(gym.Env):
         done = False
         if (ship_location == self.locations['fort'][0]):
             done = True 
+            reward = 1.0
         
         if (self.number_of_steps == self.MAX_STEPS):
             done = True 

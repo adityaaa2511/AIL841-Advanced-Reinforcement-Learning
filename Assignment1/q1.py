@@ -177,14 +177,14 @@ if __name__ == "__main__":
 
     seeds = [42, 1, 2]
     ks = [1, 2, 4, 8, 16]
-    gamma = 0.5
+    gamma = 0.95
 
     # Run experiments and get results and best policies for both init types
     results, best_policies = run_q1(locations, seeds, ks, gamma)
 
     # Plot the norms for both initialization types
-    for init_type in ["zeros", "minus100"]:
-        plot_norms(results, seeds, ks, init_type, gamma)
+    # for init_type in ["zeros", "minus100"]:
+    #     plot_norms(results, seeds, ks, init_type, gamma)
 
     # Generate GIFs for the best policies of both initialization types
     for init_type in ["zeros", "minus100"]:
